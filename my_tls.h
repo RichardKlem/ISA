@@ -48,10 +48,8 @@ struct tls_header {
 struct tls_handshake_header {
     MESSAGE_TYPE message_type;
     u_int8_t header_len = HANDSHAKE_HEADER_LEN;
-    u_char *payload{};
 };
 struct tls_packet {
     tls_header tls_h;
-    u_char *payload{};
 };
 #endif //ISA_MY_TLS_H

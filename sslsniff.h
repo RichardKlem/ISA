@@ -41,7 +41,7 @@ void signal_callback_handler(int unused);
 void callback(u_char * args, const struct pcap_pkthdr * header, const u_char * packet);
 void print_packet_preamble(unsigned char *packet, const struct pcap_pkthdr *frame, sa_family_t ip_version,
                            uint16_t dest_port, uint16_t source_port);
-void print_tcp_packet(unsigned char * packet, const struct pcap_pkthdr * frame, int size, sa_family_t ip_version);
+int print_tcp_packet(unsigned char * packet, const struct pcap_pkthdr * frame, int size, sa_family_t ip_version);
 
 
 #endif //PROJ2_PROJ_H

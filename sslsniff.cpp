@@ -92,7 +92,9 @@ void callback(u_char * args, const struct pcap_pkthdr * header, const u_char * p
     // Zpracování podle typu protokolu
     if (protocol == IPPROTO_TCP){
         tcp_count++;
-        print_tcp_packet((unsigned char *) packet, header, header->len, ip_version);
+        int ret = print_tcp_packet((unsigned char *) packet, header, header->len, ip_version);
+        if (ret)
+            exit(42);
      }
     else
         others++;
@@ -362,7 +364,7 @@ void print_packet_preamble(unsigned char *packet, const struct pcap_pkthdr *fram
  *              odsud funkce získává čas přijetí paketu
  * @param size celková velikost paketu
  */
-void print_tcp_packet(unsigned char * packet, const struct pcap_pkthdr * frame, int size, sa_family_t ip_version)
+int print_tcp_packet(unsigned char * packet, const struct pcap_pkthdr * frame, int size, sa_family_t ip_version)
 {
     unsigned short ethhdrlen = sizeof(struct ethhdr);
     unsigned short iphXhdrlen;
@@ -388,23 +390,33 @@ void print_tcp_packet(unsigned char * packet, const struct pcap_pkthdr * frame, 
     int tcphdrlen = tcph->doff * 4;
     int header_size = ethhdrlen + iphXhdrlen + tcphdrlen;
 
-    auto * tlshdr = (struct tls_header *)(packet + header_size);
 
-    if (tlshdr->content_type == HANDSHAKE){
-        auto * tls_handshake_header = (struct tls_handshake_header *) packet + header_size + TLS_HEADER_LEN;
-        if (tls_handshake_header->message_type == CLIENT_HELLO)
-            printf("%02X %02X", tls_handshake_header->payload[116-5], tls_handshake_header->payload[117-5]);
+    auto * tlshdr = (struct tls_header *)(packet + header_size);
+    if (tlshdr->content_type == HANDSHAKE) {
+        auto * tls_handshake_header = (struct tls_handshake_header *) (packet + header_size + TLS_HEADER_LEN);
+        print_packet_preamble(packet, frame, ip_version, ntohs(tcph->source));
+        printf("%02X, ", tls_handshake_header->message_type);
+        if (tls_handshake_header->message_type == CLIENT_HELLO) {
+            uint16_t name_len = *(uint16_t *) (packet + header_size + 117 + 8);
+            printf("name len = %04X, ", ntohs(name_len));
+            //printf("%02X %02X\n", *(unsigned char *) (packet + header_size + 5 + 111), * (unsigned char*) (packet + header_size + 5 + 112));
+            return 5;
+        }
     }
 
-    print_packet_preamble(packet, frame, ip_version, ntohs(tcph->source));
+    /*if (tlshdr->content_type == HANDSHAKE){
+        auto * tls_handshake_header = (struct tls_handshake_header *) packet + header_size + TLS_HEADER_LEN;
+        if (tls_handshake_header->message_type == CLIENT_HELLO){
+            printf("%02X %02X", tls_handshake_header->payload[116-5], tls_handshake_header->payload[117-5]);
+            return 5;
+        }
+    }
 
-
-
-    fprintf(outfile , "\n");
-    //print_data(packet, header_size);
-    fprintf(outfile , "\n");
-    //print_data(packet + header_size, size - header_size);
-    fprintf(outfile , "\n");
+    auto * tls_handshake_header = (struct tls_handshake_header *) packet + header_size + TLS_HEADER_LEN;
+    printf("%02X", tls_handshake_header->message_type);
+    if (tls_handshake_header->message_type == CLIENT_HELLO){
+    return 5;}*/
+    return 0;
 }
 
 /**
