@@ -18,10 +18,11 @@
 #include </usr/include/pcap/pcap.h>
 #include <getopt.h>
 #include <csignal>
+#include <exception>
 #include <netinet/ether.h>
 #include <vector>
 #include <algorithm>
-#include <sys/time.h>
+#include <string>
 #include "my_string.h"
 #include "my_session_cache.h"
 #include "my_tls.h"
@@ -389,9 +390,7 @@ void process_tcp_packet(unsigned char * packet, const struct pcap_pkthdr * frame
     int tcphdrlen = tcph->doff * 4;
     int header_size = ethhdrlen + iphXhdrlen + tcphdrlen;
 
-    /*
 
-    */
     //tcp_stream tcpStream;
     tcp_stream * tcp_stream_p;
     // Client SYN požadavek
@@ -417,27 +416,65 @@ void process_tcp_packet(unsigned char * packet, const struct pcap_pkthdr * frame
     else if(tcph->fin){
         tcp_stream_p = get_stream(src_to_print, dst_to_print, tcph);
         if (tcp_stream_p != nullptr){
-            tcp_stream_p->client_fin = true;
-            tcp_stream_p->end_time = frame->ts;
-            tcp_stream_p->packets++;
-            timeval time_div{};
-            timersub(&(tcp_stream_p->end_time), &(tcp_stream_p->start_time), &time_div);
+            if (!tcp_stream_p->client_fin){
+                tcp_stream_p->client_fin = true;
+                tcp_stream_p->packets++;
+            }
+            else{
+                tcp_stream_p->packets++;
+                tcp_stream_p->end_time = frame->ts;
+                timeval time_div{};
+                timersub(&(tcp_stream_p->end_time), &(tcp_stream_p->start_time), &time_div);
 
-            fprintf(outfile, "\n%d-%d-%d %02d:%02d:%02d.%06ld,", year, month, day, hours, minutes, seconds, microseconds);
-            fprintf(outfile , "%s,%d,", src_to_print, ntohs(tcph->source));
-            //TODO SNI
-            fprintf(outfile , "%s,%s,%d,%d,%02ld.%06ld\n", dst_to_print, "SNI", tcp_stream_p->tlsStream.bytes, tcp_stream_p->packets, time_div.tv_sec, time_div.tv_usec);
-            tcp_streams.erase((std::vector<tcp_stream>::iterator )tcp_stream_p);
+                fprintf(outfile, "\n%d-%d-%d %02d:%02d:%02d.%06ld,", year, month, day, hours, minutes, seconds, microseconds);
+                fprintf(outfile , "%s,%d,", src_to_print, ntohs(tcph->source));
+
+                fprintf(outfile , "%s,%s,%d,%d,%02ld.%06ld\n", dst_to_print, tcp_stream_p->tlsStream.sni, tcp_stream_p->tlsStream.bytes, tcp_stream_p->packets, time_div.tv_sec, time_div.tv_usec);
+                tcp_streams.erase((std::vector<tcp_stream>::iterator )tcp_stream_p);
+            }
         }
     }
-    // Client ACK potvrzeni
-    else if (!tcph->syn and tcph->ack){
+    // Ostatni pakety
+    else{
         tcp_stream_p = get_stream(src_to_print, dst_to_print, tcph);
         if (tcp_stream_p != nullptr){
             tcp_stream_p->packets++;
+
+            uint32_t payload_len = frame->len - header_size;
+            auto * payload = (unsigned char *) (packet + header_size);
+            for(int i = 0; i < payload_len; i++){
+                uint8_t content_type = payload[i];
+                uint16_t version = payload[i + 1] * 256 + payload[i + 2];
+                uint16_t content_len = payload[i + 3] * 256 + payload[i + 4];
+                if (CHANGE_CIPHER_SPEC <= content_type and content_type <= HEARTBEAT and
+                    SSL30 <= version and version <= TLS13){
+                    tcp_stream_p->tlsStream.bytes += content_len;
+                    i += content_len - 1;
+                }
+            }
+            auto * tlshdr = (struct tls_header *)(packet + header_size);
+            if ((uint8_t) tlshdr->content_type == HANDSHAKE) {
+                auto * tls_handshake_header = (struct tls_handshake_header *) (packet + header_size + TLS_HEADER_LEN);
+                if (tls_handshake_header->message_type == CLIENT_HELLO) {
+                    int len;
+                    tcp_stream_p->tlsStream.sni = strdup(get_TLS_SNI((unsigned char *) tlshdr, &len));
+                }
+            }
+
+            /*
+            if (tlshdr->content_type == HANDSHAKE){
+                auto * tls_handshake_header = (struct tls_handshake_header *) packet + header_size + TLS_HEADER_LEN;
+                if (tls_handshake_header->message_type == CLIENT_HELLO){
+                    printf("%02X %02X", tls_handshake_header->payload[116-5], tls_handshake_header->payload[117-5]);
+                    return 5;
+                }
+            }
+            auto * tls_handshake_header = (struct tls_handshake_header *) packet + header_size + TLS_HEADER_LEN;
+            printf("%02X", tls_handshake_header->message_type);
+            if (tls_handshake_header->message_type == CLIENT_HELLO){
+            return 5;}*/
         }
     }
-
 }
 
 tcp_stream * get_stream(const char *src_to_print, const char *dst_to_print, const tcphdr *tcph) {
@@ -456,6 +493,46 @@ tcp_stream * get_stream(const char *src_to_print, const char *dst_to_print, cons
         }
     }
     return nullptr;
+}
+
+struct MyException : public std::exception {
+    const char * what () const noexcept override {
+        return "Incomplete SSL Client Hello";
+    }
+};
+
+char * get_TLS_SNI(unsigned char *bytes, int* len)
+{
+    unsigned char *curr;
+    unsigned char sidlen = bytes[43];
+    curr = bytes + 1 + 43 + sidlen;
+    unsigned short cslen = ntohs(*(unsigned short*)curr);
+    curr += 2 + cslen;
+    unsigned char cmplen = *curr;
+    curr += 1 + cmplen;
+    unsigned char *maxchar = curr + 2 + ntohs(*(unsigned short*)curr);
+    curr += 2;
+    unsigned short ext_type = 1;
+    unsigned short ext_len;
+    while(curr < maxchar && ext_type != 0)
+    {
+        ext_type = ntohs(*(unsigned short*)curr);
+        curr += 2;
+        ext_len = ntohs(*(unsigned short*)curr);
+        curr += 2;
+        if(ext_type == 0)
+        {
+            curr += 3;
+            unsigned short namelen = ntohs(*(unsigned short*)curr);
+            curr += 2;
+            *len = namelen;
+            return (char*)curr;
+        }
+        else curr += ext_len;
+    }
+    if (curr != maxchar) throw MyException();
+
+    return nullptr; //SNI was not present
 }
 
 /**

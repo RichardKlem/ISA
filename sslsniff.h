@@ -44,5 +44,6 @@ void print_packet_preamble(unsigned char *packet, const struct pcap_pkthdr *fram
                            uint16_t dest_port, uint16_t source_port);
 void process_tcp_packet(unsigned char * packet, const struct pcap_pkthdr * frame, int size, sa_family_t ip_version);
 tcp_stream * get_stream(const char *src_to_print, const char *dst_to_print, const tcphdr *tcph);
+char * get_TLS_SNI(unsigned char *bytes, int* len);
 
 #endif //PROJ2_PROJ_H

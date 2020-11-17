@@ -2,13 +2,15 @@
 // Created by xklemr00 on 11/7/20.
 //
 #include <sys/socket.h>
+#include <set>
 
 #ifndef ISA_MY_TLS_H
 #define ISA_MY_TLS_H
 #define TLS_HEADER_LEN 5  //5 bajtů
 #define HANDSHAKE_HEADER_LEN 1  //1 bajt
 
-
+extern std::set<u_int8_t> CONTENT_TYPES;
+extern std::set<u_int16_t> VERSIONS;
 enum CONTENT_TYPE : u_int8_t {
     CHANGE_CIPHER_SPEC = 0x14,
     ALERT = 0x15,
@@ -17,7 +19,7 @@ enum CONTENT_TYPE : u_int8_t {
     HEARTBEAT = 0x18
 };
 
-enum VERSION : u_int16_t {
+enum VERSION : u_int16_t{
     SSL30 = 0x0300,
     TLS10 = 0x0301,
     TLS11 = 0x0302,
@@ -41,12 +43,12 @@ enum MESSAGE_TYPE : u_int8_t {
 };
 
 struct tls_header {
-    CONTENT_TYPE content_type;
-    VERSION version;
-    u_int16_t content_length;
+    u_int8_t content_type{};
+    u_int16_t version{};
+    u_int16_t content_length{};
 };
 struct tls_handshake_header {
-    MESSAGE_TYPE message_type;
+    MESSAGE_TYPE message_type{};
     u_int8_t header_len = HANDSHAKE_HEADER_LEN;
 };
 struct tls_packet {

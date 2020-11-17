@@ -17,7 +17,7 @@ struct ip_generic_addr{
 
 struct tls_stream{
     uint32_t bytes = 0;
-    char * SNI{};  // SNI může být téměř libovolně dlouhé
+    char * sni{};  // SNI může být téměř libovolně dlouhé
     bool client_hello = false;
     bool server_hello = false;
 
