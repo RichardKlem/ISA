@@ -40,10 +40,9 @@ enum EXIT_CODES {OK = 0,
 
 void signal_callback_handler(int unused);
 void callback(u_char * args, const struct pcap_pkthdr * header, const u_char * packet);
-void print_packet_preamble(unsigned char *packet, const struct pcap_pkthdr *frame, sa_family_t ip_version,
-                           uint16_t dest_port, uint16_t source_port);
 void process_tcp_packet(unsigned char * packet, const struct pcap_pkthdr * frame, int size, sa_family_t ip_version);
 tcp_stream * get_stream(const char *src_to_print, const char *dst_to_print, const tcphdr *tcph);
 char * get_TLS_SNI(unsigned char *bytes, int* len);
+void process_payload(const unsigned char *packet, const pcap_pkthdr *frame, int header_size, tcp_stream *tcp_stream_p);
 
 #endif //PROJ2_PROJ_H

@@ -314,22 +314,6 @@ int main(int argc, char * argv[]) {
 }
 
 /**
- * @brief Funkce vytiskne úvodní údaje:
- *          - čas přijetí paketu
- *          - zdrojová a cílová adresa(nebo jméno, pokud se adresa podaří přeložit)
- *          - zdrojový a cílový port
- * @param packet ukazatel na pole obsahující data příchozího paketu
- * @param frame ukazatel na strukturu představující zaobalující rámec celého paketu, 
- *              odsud funkce získává čas přijetí paketu
- * @param source_port zdrojový port
- * @param dest_port cílový port
- */
-void print_packet_preamble(unsigned char *packet, const struct pcap_pkthdr *frame, sa_family_t ip_version,
-                           uint16_t source_port = 0) {
-
-}
-
-/**
  * @brief Funkce tiskne nejprve ethernetovou, IP a TCP hlavičku, pak jeden prázdný řádek a následně samotná data.
  * @param packet ukazatel na pole obsahující data příchozího paketu
  * @param frame ukazatel na strukturu představující zaobalující rámec celého paketu,
@@ -341,16 +325,6 @@ void process_tcp_packet(unsigned char * packet, const struct pcap_pkthdr * frame
     unsigned short ethhdrlen = sizeof(struct ethhdr);
     unsigned short iphXhdrlen;
     tcp_stream tmp_tcp_stream;
-
-    //získání a zpracování "časové stopy" paketu
-    tm * time = localtime(&(frame->ts.tv_sec));
-    int year = time->tm_year + 1900;
-    int month = time->tm_mon + 1;
-    int day = time->tm_mday;
-    int hours = time->tm_hour;
-    int minutes = time->tm_min;
-    int seconds = time->tm_sec;
-    long int microseconds = frame->ts.tv_usec;
 
     //struct sockaddr_in src{};
     char *src_to_print;
@@ -395,15 +369,21 @@ void process_tcp_packet(unsigned char * packet, const struct pcap_pkthdr * frame
     tcp_stream * tcp_stream_p;
     // Client SYN požadavek
     if (tcph->syn and !tcph->ack){
-        tmp_tcp_stream.packets++;
-        tmp_tcp_stream.client_ip = strdup(src_to_print);
-        tmp_tcp_stream.server_ip = strdup(dst_to_print);
-        tmp_tcp_stream.client_port = ntohs(tcph->source);
-        tmp_tcp_stream.server_port = ntohs(tcph->dest);
-        tmp_tcp_stream.client_first_seq = tcph->th_seq;
-        tmp_tcp_stream.client_last_seq = tmp_tcp_stream.client_first_seq;
-        tmp_tcp_stream.start_time = frame->ts;
-        tcp_streams.push_back(tmp_tcp_stream);
+        tcp_stream_p = get_stream(src_to_print, dst_to_print, tcph);
+        if (tcp_stream_p == nullptr){
+            tmp_tcp_stream.packets++;
+            tmp_tcp_stream.client_ip = strdup(src_to_print);
+            tmp_tcp_stream.server_ip = strdup(dst_to_print);
+            tmp_tcp_stream.client_port = ntohs(tcph->source);
+            tmp_tcp_stream.server_port = ntohs(tcph->dest);
+            tmp_tcp_stream.client_first_seq = tcph->th_seq;
+            tmp_tcp_stream.client_last_seq = tmp_tcp_stream.client_first_seq;
+            tmp_tcp_stream.start_time = frame->ts;
+            tcp_streams.push_back(tmp_tcp_stream);
+        }
+        else {
+            tcp_stream_p->packets++;
+        }
     }
     // Server SYN, ACK odpověď
     else if (tcph->syn and tcph->ack){
@@ -419,19 +399,62 @@ void process_tcp_packet(unsigned char * packet, const struct pcap_pkthdr * frame
             if (!tcp_stream_p->client_fin){
                 tcp_stream_p->client_fin = true;
                 tcp_stream_p->packets++;
+                process_payload(packet, frame, header_size, tcp_stream_p);
             }
             else{
+                process_payload(packet, frame, header_size, tcp_stream_p);
+
                 tcp_stream_p->packets++;
                 tcp_stream_p->end_time = frame->ts;
                 timeval time_div{};
                 timersub(&(tcp_stream_p->end_time), &(tcp_stream_p->start_time), &time_div);
-
-                fprintf(outfile, "\n%d-%d-%d %02d:%02d:%02d.%06ld,", year, month, day, hours, minutes, seconds, microseconds);
-                fprintf(outfile , "%s,%d,", src_to_print, ntohs(tcph->source));
-
-                fprintf(outfile , "%s,%s,%d,%d,%02ld.%06ld\n", dst_to_print, tcp_stream_p->tlsStream.sni, tcp_stream_p->tlsStream.bytes, tcp_stream_p->packets, time_div.tv_sec, time_div.tv_usec);
+                //získání a zpracování "časové stopy" paketu
+                tm * time = localtime(&(tcp_stream_p->start_time.tv_sec));
+                int year = time->tm_year + 1900;
+                int month = time->tm_mon + 1;
+                int day = time->tm_mday;
+                int hours = time->tm_hour;
+                int minutes = time->tm_min;
+                int seconds = time->tm_sec;
+                long int microseconds = tcp_stream_p->start_time.tv_usec;
+                if (tcp_stream_p->tlsStream.bytes > 0 and tcp_stream_p->tlsStream.client_hello and tcp_stream_p->tlsStream.server_hello) {
+                    fprintf(outfile, "%04d-%02d-%02d %02d:%02d:%02d.%06ld,", year, month, day, hours, minutes, seconds, microseconds);
+                    fprintf(outfile, "%s,%d,", tcp_stream_p->client_ip, tcp_stream_p->client_port);
+                    fprintf(outfile, "%s,%s,", tcp_stream_p->server_ip, tcp_stream_p->tlsStream.sni);
+                    fprintf(outfile, "%d,%d,", tcp_stream_p->tlsStream.bytes, tcp_stream_p->packets);
+                    fprintf(outfile, "%ld.%06ld\n", time_div.tv_sec, time_div.tv_usec);
+                }
                 tcp_streams.erase((std::vector<tcp_stream>::iterator )tcp_stream_p);
             }
+        }
+    }
+    // RST
+    else if(tcph->rst){
+        tcp_stream_p = get_stream(src_to_print, dst_to_print, tcph);
+        if (tcp_stream_p != nullptr){
+            process_payload(packet, frame, header_size, tcp_stream_p);
+
+            tcp_stream_p->packets++;
+            tcp_stream_p->end_time = frame->ts;
+            timeval time_div{};
+            timersub(&(tcp_stream_p->end_time), &(tcp_stream_p->start_time), &time_div);
+            //získání a zpracování "časové stopy" paketu
+            tm * time = localtime(&(tcp_stream_p->start_time.tv_sec));
+            int year = time->tm_year + 1900;
+            int month = time->tm_mon + 1;
+            int day = time->tm_mday;
+            int hours = time->tm_hour;
+            int minutes = time->tm_min;
+            int seconds = time->tm_sec;
+            long int microseconds = tcp_stream_p->start_time.tv_usec;
+            if (tcp_stream_p->tlsStream.bytes > 0 and tcp_stream_p->tlsStream.client_hello and tcp_stream_p->tlsStream.server_hello){
+                fprintf(outfile, "%04d-%02d-%02d %02d:%02d:%02d.%06ld,", year, month, day, hours, minutes, seconds, microseconds);
+                fprintf(outfile , "%s,%d,", tcp_stream_p->client_ip, tcp_stream_p->client_port);
+                fprintf(outfile , "%s,%s,", tcp_stream_p->server_ip, tcp_stream_p->tlsStream.sni);
+                fprintf(outfile , "%d,%d,", tcp_stream_p->tlsStream.bytes, tcp_stream_p->packets);
+                fprintf(outfile , "%ld.%06ld\n", time_div.tv_sec, time_div.tv_usec);
+            }
+            tcp_streams.erase((std::vector<tcp_stream>::iterator )tcp_stream_p);
         }
     }
     // Ostatni pakety
@@ -440,39 +463,34 @@ void process_tcp_packet(unsigned char * packet, const struct pcap_pkthdr * frame
         if (tcp_stream_p != nullptr){
             tcp_stream_p->packets++;
 
-            uint32_t payload_len = frame->len - header_size;
-            auto * payload = (unsigned char *) (packet + header_size);
-            for(int i = 0; i < payload_len; i++){
-                uint8_t content_type = payload[i];
-                uint16_t version = payload[i + 1] * 256 + payload[i + 2];
-                uint16_t content_len = payload[i + 3] * 256 + payload[i + 4];
-                if (CHANGE_CIPHER_SPEC <= content_type and content_type <= HEARTBEAT and
-                    SSL30 <= version and version <= TLS13){
-                    tcp_stream_p->tlsStream.bytes += content_len;
-                    i += content_len - 1;
-                }
-            }
-            auto * tlshdr = (struct tls_header *)(packet + header_size);
-            if ((uint8_t) tlshdr->content_type == HANDSHAKE) {
-                auto * tls_handshake_header = (struct tls_handshake_header *) (packet + header_size + TLS_HEADER_LEN);
-                if (tls_handshake_header->message_type == CLIENT_HELLO) {
-                    int len;
-                    tcp_stream_p->tlsStream.sni = strdup(get_TLS_SNI((unsigned char *) tlshdr, &len));
-                }
-            }
+            process_payload(packet, frame, header_size, tcp_stream_p);
+        }
+    }
+}
 
-            /*
-            if (tlshdr->content_type == HANDSHAKE){
-                auto * tls_handshake_header = (struct tls_handshake_header *) packet + header_size + TLS_HEADER_LEN;
-                if (tls_handshake_header->message_type == CLIENT_HELLO){
-                    printf("%02X %02X", tls_handshake_header->payload[116-5], tls_handshake_header->payload[117-5]);
-                    return 5;
-                }
-            }
-            auto * tls_handshake_header = (struct tls_handshake_header *) packet + header_size + TLS_HEADER_LEN;
-            printf("%02X", tls_handshake_header->message_type);
-            if (tls_handshake_header->message_type == CLIENT_HELLO){
-            return 5;}*/
+void process_payload(const unsigned char *packet, const pcap_pkthdr *frame, int header_size, tcp_stream *tcp_stream_p) {
+    uint32_t payload_len = frame->len - header_size;
+    auto * payload = (unsigned char *) (packet + header_size);
+    for(int i = 0; ((i + 4) < payload_len)  and (payload_len > 6); i++){
+        uint8_t content_type = payload[i];
+        uint16_t version = payload[i + 1] * 256 + payload[i + 2];
+        uint16_t content_len = payload[i + 3] * 256 + payload[i + 4];
+        if (CHANGE_CIPHER_SPEC <= content_type and content_type <= HEARTBEAT and
+            SSL30 <= version and version <= TLS13){
+            tcp_stream_p->tlsStream.bytes += content_len;
+            i += content_len;
+        }
+    }
+    auto * tlshdr = (struct tls_header *)(packet + header_size);
+    if ((uint8_t) tlshdr->content_type == HANDSHAKE) {
+        auto * tls_handshake_header = (struct tls_handshake_header *) (packet + header_size + TLS_HEADER_LEN);
+        if (tls_handshake_header->message_type == CLIENT_HELLO) {
+            tcp_stream_p->tlsStream.client_hello = true;
+            int len;
+            tcp_stream_p->tlsStream.sni = strdup(get_TLS_SNI((unsigned char *) tlshdr, &len));
+        }
+        else if(tls_handshake_header->message_type == SERVER_HELLO){
+            tcp_stream_p->tlsStream.server_hello = true;
         }
     }
 }
@@ -532,13 +550,5 @@ char * get_TLS_SNI(unsigned char *bytes, int* len)
     }
     if (curr != maxchar) throw MyException();
 
-    return nullptr; //SNI was not present
-}
-
-/**
- * @brief Vytiskne číslo v hexadecimálním tvaru s fixní délkou 4 s vyplňujícími nulami před číslem
- * @param size číslo, které se má vytisknout
- */
-void print_bytes(int size){
-    fprintf(outfile, "0x%04x", size);
+    return (char *)""; //SNI was not present
 }
