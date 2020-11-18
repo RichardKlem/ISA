@@ -1,6 +1,8 @@
-//
-// Created by Richard Klem on 23.04.20.
-//
+/**
+ * @author: Richard Klem
+ * @email: xklemr00@stud.fit.vutbr.cz
+ * @login: xklemr00
+ */
 #include <cstdint>
 #include <sys/socket.h>
 #include "my_string.h"
@@ -14,19 +16,23 @@
 #define RST "\033[0m"
 
 int BUFFER_SIZE = 65536;
-const char * help_text = "\n***Nápověda k snifferu paketů***\n"
-                   "  Možné parametry:\n"
-                   "    -i nazev_rozhrani (Rozhraní, na kterém se bude poslouchat.\n"
-                   "            Nebude-li tento parametr uveden, vypíše se seznam aktivních rozhraní)\n"
+const char * help_text = "\n***Nápověda k SSL snifferu***\n"
+                         "  sudo ./sslsniff [-i <nazev_rozhrani>| -r <nazev_souboru.pcapng>] [volitelné argumenty]\n"
+                   "  Možné parametry POVINNÉ:\n"
+                   "    -i <nazev_rozhrani> (Rozhraní, na kterém se bude poslouchat).\n"
+                   "  nebo\n"
+                   "    -r <nazev_souboru> (Soubor se zachycenými daty).\n"
+                   "            Nebude-li ani jeden z těchto parametrů uveden, "
+                   "            vypíše zkrácená nápověda se seznam aktivních rozhraní)\n"
+                   "  Možné parametry VOLITELNÉ:\n"
                    "    -p int:cislo_portu (Sniffer bude zachytávat pakety pouze na daném portu,\n"
                    "            nebude-li tento parametr uveden, uvažují se všechny porty)\n"
-                   "    -t | --tcp (bude zobrazovat pouze tcp pakety)\n"
                    "    -n | --num int:pocet_paketu (Určuje počet vypsaných paketů,\n"
-                   "        pokud nebude počet specifikován, vypíše se pouze 1 paket.)\n"
-                   "    -6 | --ip6 (Filtruje IPv6 protokol, lze kombinovat s IPv4, tcp, udp a port filtrováním.)\n"
-                   "    -4 | --ip4 (Filtruje IPv6 protokol, lze kombinovat s IPv6, tcp, udp a port filtrováním.)\n"
-                   "    -a | --all (Nefiltruje se nic, zachytávají se všechny pakety, vypisují se pouze podporované.)\n"
+                   "        pokud nebude počet specifikován, bude program běžet až do ukončení zvenčí(např. SIGINT).)\n"
+                   "    -6 | --ip6 (Filtruje IPv6 protokol, lze kombinovat s IPv4 a port filtrováním.)\n"
+                   "    -4 | --ip4 (Filtruje IPv6 protokol, lze kombinovat s IPv6 a port filtrováním.)\n"
                    "    -s | --stats (Výpis statistik o síťovém provozu na konci běhu programu.)\n"
+                   "  Společně s parametrem -r je efektivní pouze parametr -s. Ostatní jsou s parametrem -r neúčinné.\n"
                    "  Krátké parametry je možné zadávat ve tvaru \"-n5\" anebo \"-n 5\".\n"
                    "  Dlouhé parametry je nutné zadávat ve tvaru \"--num=5\".\n\n";
 

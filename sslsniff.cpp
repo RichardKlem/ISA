@@ -1,27 +1,25 @@
-//
-// Created by xklemr00 on 24.9.20.
-//
+/**
+ * @author: Richard Klem, except explicitly marked parts
+ * @email: xklemr00@stud.fit.vutbr.cz
+ * @login: xklemr00
+ */
 #include <netinet/in.h>
 #include <netdb.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <netinet/udp.h>
 #include <netinet/tcp.h>
 #include <netinet/ip.h>
 #include <netinet/ip6.h>
 #include <net/ethernet.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
-//#include <ctime>
 #include <sys/types.h>
 #include </usr/include/pcap/pcap.h>
 #include <getopt.h>
 #include <csignal>
 #include <exception>
-#include <netinet/ether.h>
 #include <vector>
-#include <algorithm>
 #include <cmath>
 #include "my_string.h"
 #include "my_session_cache.h"
@@ -29,20 +27,18 @@
 #include "sslsniff.h"
 
 
-
-
-//definice globálních proměnných
+// Definice globálních proměnných.
 struct sockaddr_in sock_source_4;
 struct sockaddr_in6 sock_source_6;
 int tcp_count = 0, total = 0, others = 0;
 char * interface_arg;
 char * captured_file_arg;
-int interface_flag = 0, captured_file_flag = 0, tcp_flag = 1, ip6_flag = 0, ip4_flag = 0, all_flag = 0,
-stats_flag = 0, port_flag = 0, port_arg = 0, num_arg = -1, bytes_read = 0;
+int interface_flag = 0, captured_file_flag = 0, ip6_flag = 0, ip4_flag = 0,
+stats_flag = 0, port_flag = 0, port_arg = 0, num_arg = -1;
 FILE * outfile = stdout;
 FILE * error_outfile = stderr;
 
-//definice dlouhých přepínačů
+// Definice dlouhých přepínačů.
 struct option long_options[] =
         {
                 {"help",   no_argument,        0, 'h'},
@@ -55,14 +51,14 @@ struct option long_options[] =
                 {0, 0, 0, 0}  // ukoncovaci prvek
         };
 
-//definice krátkých přepínačů
+// Definice krátkých přepínačů.
 char *short_options = (char*)"h64asn:p:i:r:";
 /**
  * @brief Funkce slouží jako koncová procedura při zachycení signálu SIGINT
  * @param unused povinně přítomný argument, není dále využit
  */
 void signal_callback_handler(int unused){
-    unused = unused; //obelstění překladače a jeho varování na nevyužitou proměnnou
+    unused = unused; // "Obelstění" překladače a jeho varování na nevyužitou proměnnou.
     if (stats_flag){
         total = tcp_count + others;
         fprintf(outfile,
@@ -83,13 +79,12 @@ void signal_callback_handler(int unused){
  */
 void callback(u_char * args, const struct pcap_pkthdr * header, const u_char * packet){
     args = args; //ditto parametr unused funkce signal_callback_handler()
-    bytes_read = 0; //nulování počtu přečtených bajtů na 0x0000
     sa_family_t ip_version = AF_UNSPEC;
     int protocol;
 
-    auto ether_type = (packet[12] << (unsigned int) 8) + packet[13]; //nastavení ether type z ethernetového rámce
+    auto ether_type = (packet[12] << (unsigned int) 8) + packet[13]; // Nastavení ether type z ethernetového rámce.
 
-    //Zpracování ether typu
+    // Zpracování ether typu.
     if (ether_type== ETH_P_IP){
         sock_source_4.sin_family = AF_INET;
         ip_version = AF_INET;
@@ -102,9 +97,9 @@ void callback(u_char * args, const struct pcap_pkthdr * header, const u_char * p
     }
     else{  // něco nepodporovaného
         others++;
-        return;  // není třeba zpracovat, ale je potřeba inkrementovat pouze jednou
+        return;  // Není třeba zpracovat, ale je potřeba inkrementovat pouze jednou.
     }
-    // Zajímají mě pouze TCP pakety
+    // Zajímají mě pouze TCP pakety.
     if (protocol == IPPROTO_TCP){
         tcp_count++;
         process_tcp_packet((unsigned char *) packet, header, ip_version);
@@ -114,12 +109,13 @@ void callback(u_char * args, const struct pcap_pkthdr * header, const u_char * p
 }
 
 /**
- * @brief Hlavní funkce, zpracovávají se zde argumenty a připojuje se zde na rozhraní a aplikují se na něj filtry.
+ * @brief Hlavní funkce, zpracovávají se zde argumenty a připojuje se zde na rozhraní
+ * a aplikují se na něj filtry nebo se otevírá soubor se zachycenou komunikací.
  * Části týkající se manipulace s rozhraním jsou inspirovány z odkazované literatury.
  * Konkrétně na webu https://www.tcpdump.org/pcap.html
  */
 int main(int argc, char * argv[]) {
-    signal(SIGINT, signal_callback_handler);  // zachycení SIGINT v průběhu vykonávání programu
+    signal(SIGINT, signal_callback_handler);  // Zachycení SIGINT v průběhu vykonávání programu.
 
     pcap_t * handle;
     char * dev;
@@ -132,7 +128,7 @@ int main(int argc, char * argv[]) {
     int c;
     int option_index;
 
-    // zpracování argumentů
+    // Zpracování argumentů.
     if (argc > 1){
         while ((c = getopt_long(argc, argv, short_options, long_options, &option_index)) != -1)
         {
@@ -142,7 +138,7 @@ int main(int argc, char * argv[]) {
             switch (c)
             {
                 case 'h':
-                    fprintf(stdout,"%s", help_text);
+                    fprintf(outfile,"%s", help_text);
                     exit (OK);
                 case 'i':
                     interface_flag = 1;
@@ -188,13 +184,6 @@ int main(int argc, char * argv[]) {
                         exit(BAD_ARG_VALUE);
                     }
                     ip4_flag = 1;
-                    break;
-                case 'a':
-                    if (p_tmp->status == S2I_OK){
-                        fprintf(error_outfile, "\n%s   Parametr -A | --all nepřijímá žádné argumenty.%s\n\n", RED, RST);
-                        exit(BAD_ARG_VALUE);
-                    }
-                    all_flag = 1;
                     break;
                 case 's':
                     if (p_tmp->status == S2I_OK){
@@ -274,14 +263,10 @@ int main(int argc, char * argv[]) {
         else if (ip6_flag)
             sprintf(filter_exp, "ether proto \\ip6 and ");
 
-        if (all_flag)
-            sprintf(filter_exp, " ");  // žádný filtr, zachytává se vše
-        else{
-            if (port_flag)
-                sprintf(filter_exp + strlen(filter_exp), "tcp port %d", port_arg);
-            else
-                sprintf(filter_exp + strlen(filter_exp), "tcp");
-        }
+        if (port_flag)
+            sprintf(filter_exp + strlen(filter_exp), "tcp port %d", port_arg);
+        else
+            sprintf(filter_exp + strlen(filter_exp), "tcp");
 
         if (pcap_compile(handle, &fp, filter_exp, 0, net) == -1) {
             fprintf(error_outfile, "\n   Nepodařilo se přeložit filtr \"%s\" na rozhraní \"%s\".\n\n", filter_exp, dev);
@@ -298,7 +283,7 @@ int main(int argc, char * argv[]) {
         if (num_arg == 0)
             return OK;
 
-        // cyklus dokud počet přijatých paketu není roven num_arg
+        // Cyklus dokud počet přijatých paketu není roven num_arg.
         pcap_loop(handle, num_arg, callback, nullptr);  // https://linux.die.net/man/3/pcap_loop
         pcap_close(handle);
         if (stats_flag){
@@ -310,7 +295,7 @@ int main(int argc, char * argv[]) {
         }
         return OK;
     }
-    else {  // Zpracování pcapng souboru
+    else {  // Zpracování pcapng souboru.
         handle = pcap_open_offline(captured_file_arg, errbuf);
         if (nullptr == handle){
             fprintf(error_outfile, "\n   Nepodařilo se otevřít soubor '%s'.\n\n", captured_file_arg);
@@ -340,9 +325,7 @@ void process_tcp_packet(unsigned char * packet, const struct pcap_pkthdr * frame
     unsigned short iphXhdrlen;
     tcp_stream tmp_tcp_stream;
 
-    //struct sockaddr_in src{};
     char *src_to_print;
-    //struct sockaddr_in dst{};
     char * dst_to_print;
     char src_name[NI_MAXHOST];
     char dest_name[NI_MAXHOST];
@@ -351,7 +334,7 @@ void process_tcp_packet(unsigned char * packet, const struct pcap_pkthdr * frame
     if (ip_version == AF_INET){
         auto * iph = (struct iphdr *)(packet + sizeof(struct ethhdr) );
         iphXhdrlen = (unsigned short) iph->ihl * 4;
-        //IP hlavička musí mít 20-60 bajtů
+        // IP hlavička musí mít 20-60 bajtů.
         if (iphXhdrlen < 20 or iphXhdrlen > 60) {
             fprintf(error_outfile,"\n   Neplatná délka IPv4 hlavičky, délka = %u bajtů\n", iphXhdrlen);
             exit(PACKET_ERROR);
@@ -378,10 +361,8 @@ void process_tcp_packet(unsigned char * packet, const struct pcap_pkthdr * frame
     int tcphdrlen = tcph->doff * 4;
     int header_size = ethhdrlen + iphXhdrlen + tcphdrlen;
 
-
-    //tcp_stream tcpStream;
     tcp_stream * tcp_stream_p;
-    // Client SYN požadavek
+    // Klient SYN požadavek
     if (tcph->syn and !tcph->ack){
         tcp_stream_p = get_stream(src_to_print, dst_to_print, tcph);
         if (tcp_stream_p == nullptr){
@@ -390,8 +371,6 @@ void process_tcp_packet(unsigned char * packet, const struct pcap_pkthdr * frame
             tmp_tcp_stream.server_ip = strdup(dst_to_print);
             tmp_tcp_stream.client_port = ntohs(tcph->source);
             tmp_tcp_stream.server_port = ntohs(tcph->dest);
-            tmp_tcp_stream.client_first_seq = tcph->th_seq;
-            tmp_tcp_stream.client_last_seq = tmp_tcp_stream.client_first_seq;
             tmp_tcp_stream.start_time = frame->ts;
             tcp_streams.push_back(tmp_tcp_stream);
         }
@@ -406,23 +385,24 @@ void process_tcp_packet(unsigned char * packet, const struct pcap_pkthdr * frame
             tcp_stream_p->packets++;
         }
     }
-    // FIN
+    // FIN příznak
     else if(tcph->fin){
         tcp_stream_p = get_stream(src_to_print, dst_to_print, tcph);
         if (tcp_stream_p != nullptr){
             if (!tcp_stream_p->client_fin){
                 tcp_stream_p->client_fin = true;
                 tcp_stream_p->packets++;
-                process_payload(packet, frame, header_size, tcp_stream_p);
+                process_payload(packet, frame, header_size, tcp_stream_p);  // Zpracovani obsahu TLS.
             }
             else{
-                process_payload(packet, frame, header_size, tcp_stream_p);
+                process_payload(packet, frame, header_size, tcp_stream_p);  // Zpracovani obsahu TLS.
 
                 tcp_stream_p->packets++;
                 tcp_stream_p->end_time = frame->ts;
                 timeval time_div{};
                 timersub(&(tcp_stream_p->end_time), &(tcp_stream_p->start_time), &time_div);
-                //získání a zpracování "časové stopy" paketu
+
+                // Získání a zpracování "časové stopy" paketu
                 tm * time = localtime(&(tcp_stream_p->start_time.tv_sec));
                 int year = time->tm_year + 1900;
                 int month = time->tm_mon + 1;
@@ -442,11 +422,11 @@ void process_tcp_packet(unsigned char * packet, const struct pcap_pkthdr * frame
             }
         }
     }
-    // RST
+    // RST příznak
     else if(tcph->rst){
         tcp_stream_p = get_stream(src_to_print, dst_to_print, tcph);
         if (tcp_stream_p != nullptr){
-            process_payload(packet, frame, header_size, tcp_stream_p);
+            process_payload(packet, frame, header_size, tcp_stream_p);  // Zpracovani obsahu TLS.
 
             tcp_stream_p->packets++;
             tcp_stream_p->end_time = frame->ts;
@@ -471,17 +451,23 @@ void process_tcp_packet(unsigned char * packet, const struct pcap_pkthdr * frame
             tcp_streams.erase((std::vector<tcp_stream>::iterator )tcp_stream_p);
         }
     }
-    // Ostatni pakety
+    // Ostatní pakety
     else{
         tcp_stream_p = get_stream(src_to_print, dst_to_print, tcph);
         if (tcp_stream_p != nullptr){
             tcp_stream_p->packets++;
-
-            process_payload(packet, frame, header_size, tcp_stream_p);
+            process_payload(packet, frame, header_size, tcp_stream_p);  // Zpracovani obsahu TLS.
         }
     }
 }
-
+/**
+ * @brief Funkec provede průchod datovou sekcí TLS části paketu a hledá TLS hlavičku.
+ * Když ji nalezne, tak extrahuje patřičné informace do patřičných atributů struktury tcp_stream.
+ * @param packet ukazatel na začátek dat.
+ * @param frame ukazatel na strukturu představující zaobalující rámec celého paketu
+ * @param header_size velikost hlaviček
+ * @param tcp_stream_p ukazatel na strukturu tcp_stream ve vektoru TCP sezení
+ */
 void process_payload(const unsigned char *packet, const pcap_pkthdr *frame, int header_size, tcp_stream *tcp_stream_p) {
     uint32_t payload_len = frame->len - header_size;
     auto * payload = (unsigned char *) (packet + header_size);
@@ -508,10 +494,17 @@ void process_payload(const unsigned char *packet, const pcap_pkthdr *frame, int 
         }
     }
 }
-
+/**
+ * @brief Funkce vrátí ukazatel na strukturu tcp_stream z vektoru TCP sezení, pokud
+ * najde takovy zaznam, kde odovidaji IP adresy a porty spojeni. Jinak vrací nullptr.
+ * @param src_to_print zdrojova adresa prichoziho paketu
+ * @param dst_to_print cilova adresa prichoziho paketu
+ * @param tcph ukazatel na TCP hlavičku, kde jsou informace o portech
+ * @return ukazatel na strukturu tcp_stream, pokud se nalezne, jinak nullptr
+ */
 tcp_stream * get_stream(const char *src_to_print, const char *dst_to_print, const tcphdr *tcph) {
     for (auto &el : tcp_streams){
-        // Když sedí IP a porty serveru ke klientovi
+        // Když sedí IP a porty serveru ke klientovi, pak vrátí ukazatel na nalezený tcp_stream.
         if (((!strcmp(el.client_ip, dst_to_print)) and
               (!strcmp(el.server_ip, src_to_print)) and
               (el.client_port == ntohs(tcph->dest)) and
@@ -526,13 +519,23 @@ tcp_stream * get_stream(const char *src_to_print, const char *dst_to_print, cons
     }
     return nullptr;
 }
-
+/**
+ * @brief Vlastní výjimka pro funkci get_TLS_SNI
+ */
 struct MyException : public std::exception {
     const char * what () const noexcept override {
-        return "Incomplete SSL Client Hello";
+        return "SNI záznam není validní.";
     }
 };
-
+/**
+ * @brief Funkce vrátí SNI řetězec nebo prázdný řetězec, pokud je SNI nevalidní.
+ * Funkce byla převzata z diskuzního vlákna na StackOverflow jako odpověď od uživatele Æðelstan.
+ * Odkaz: https://stackoverflow.com/a/41338546
+ * Ve funkci jsem upravil dva řádky a jsou náležitě označeny. Jinak je funkce původní.
+ * @param bytes ukazatel na TCP paket
+ * @param len ukazatel na velikost SNI
+ * @return SNI nebo prázdný řetězec, pokud je SNI nevalidní
+ */
 char * get_TLS_SNI(unsigned char *bytes, int* len)
 {
     unsigned char *curr;
@@ -562,7 +565,7 @@ char * get_TLS_SNI(unsigned char *bytes, int* len)
         }
         else curr += ext_len;
     }
-    if (curr != maxchar) throw MyException();
+    if (curr != maxchar) throw MyException();  // Zde náhrada za vlastní výjimku.
 
-    return (char *)""; //SNI was not present
+    return (char *)"";  // Zde moje úprava, místo nullptr vracím prázdný řetězec.
 }

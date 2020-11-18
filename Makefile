@@ -1,3 +1,7 @@
+# @author: Richard Klem
+# @email: xklemr00@stud.fit.vutbr.cz
+# @login: xklemr00
+
 .PHONY: all run prog cleanall
 SOURCES= sslsniff.cpp my_session_cache.cpp my_string.cpp my_tls.cpp sslsniff.h my_session_cache.h my_string.h my_tls.h
 

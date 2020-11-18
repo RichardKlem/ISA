@@ -1,7 +1,8 @@
-//
-// Created by richardklem on 24.04.20.
-//
-
+/**
+ * @author: Richard Klem
+ * @email: xklemr00@stud.fit.vutbr.cz
+ * @login: xklemr00
+ */
 #ifndef PROJ2_MY_STRING_H
 #define PROJ2_MY_STRING_H
 enum STR2INT_STATUS_CODE {S2I_FAIL, S2I_OK};

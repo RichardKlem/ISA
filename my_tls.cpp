@@ -1,6 +1,8 @@
-//
-// Created by xklemr00 on 24.9.20.
-//
+/**
+ * @author: Richard Klem
+ * @email: xklemr00@stud.fit.vutbr.cz
+ * @login: xklemr00
+ */
 #include <set>
 #include <sys/socket.h>
 

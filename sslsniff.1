@@ -1,0 +1,53 @@
+.\" Process this file with
+.\" groff -man -Tascii foo.1
+.\"
+.TH "sslsniff" "1" "November 2020" "Linux" "Users Manuals"
+.SH NAME
+sslsniff
+.SH SYNOPSIS
+sudo ./sslsniff [-i nazev_rozhrani | -r nazev_souboru.pcapng]
+.SH DESCRIPTION
+Aplikace načte a zpracuje vstupní argumenty a zkontroluje jejich korektnost.
+Napojí se na specifikované rozhraní a aplikuje na něj patřičné filtry. Nebo otevře
+soubor se zachycenými daty. Následně se volá funkce `pcap_loop`, která zachytává 
+filtrované pakety. Nad každým paketem zavolá tzv. `pcap_handler` fuknci. To je funkce,
+která obstarává samotné zpracování paketu. V mojí implementaci se funkce jmenuje
+`callback`. Funkce `callback` využívá řadu podpůrných funkcí pro zpracování konkrétních
+typů paketů a výsledkem je výpis dat z paketu v požadovaném formátu na výstup programu.
+.in
+
+.SH OPTIONS
+.IP "-i nazev_rozhrani"
+Rozhraní, na kterém se bude poslouchat
+.IP "-r nazev_souboru"
+Soubor se zachycenými daty
+.IP -p cislo_portu
+Sniffer bude zachytávat pakety pouze na daném portu,
+nebude-li tento parametr uveden, uvažují se všechny porty.
+.IP -n | --num pocet_paketu
+Určuje počet vypsaných paketů, pokud nebude počet specifikován, 
+bude program běžet až do ukončení zvenčí(SIGINT).
+.IP -6 | --ip6
+Filtruje IPv6 protokol, lze kombinovat s IPv4 a port filtrováním.
+.IP -4 | --ip4
+Filtruje IPv6 protokol, lze kombinovat s IPv6, a port filtrováním.
+.IP -s | --stats
+Výpis statistik o síťovém provozu na konci běhu programu.
+.SH ODEVZDANE SOUBORY
+Makefile
+manual.pdf
+my_session_cache.cpp
+my_session_cache.h
+my_string.cpp
+my_string.h
+my_tls.cpp
+my_tls.h
+sslsniff.1
+sslsniff.cpp
+sslsniff.h
+
+.SH BUGS
+V této verzi nejsou známy žádné chyby.
+.SH AUTHOR
+Richard Klem - xklemr00@stud.fit.vutbr.cz
+

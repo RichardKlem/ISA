@@ -1,6 +1,8 @@
-//
-// Created by xklemr00 on 7-11-20.
-//
+/**
+ * @author: Richard Klem
+ * @email: xklemr00@stud.fit.vutbr.cz
+ * @login: xklemr00
+ */
 #include <vector>
 #include "my_session_cache.h"
 
