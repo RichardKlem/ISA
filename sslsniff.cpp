@@ -22,7 +22,7 @@
 #include <netinet/ether.h>
 #include <vector>
 #include <algorithm>
-#include <string>
+#include <cmath>
 #include "my_string.h"
 #include "my_session_cache.h"
 #include "my_tls.h"
@@ -63,6 +63,13 @@ char *short_options = (char*)"h64asn:p:i:r:";
  */
 void signal_callback_handler(int unused){
     unused = unused; //obelstění překladače a jeho varování na nevyužitou proměnnou
+    if (stats_flag){
+        total = tcp_count + others;
+        fprintf(outfile,
+                "\n  Celkový počet: ...%d\n"
+                "  TCP: .............%d\n"
+                "  Ostatní: .........%d\n", total, tcp_count, others);
+    }
     fprintf(outfile, "\n\n   Byl zaslán signál SIGINT, program se ukočuje.\n\n");
     exit(OK);
 }
@@ -100,7 +107,7 @@ void callback(u_char * args, const struct pcap_pkthdr * header, const u_char * p
     // Zajímají mě pouze TCP pakety
     if (protocol == IPPROTO_TCP){
         tcp_count++;
-        process_tcp_packet((unsigned char *) packet, header, header->len, ip_version);
+        process_tcp_packet((unsigned char *) packet, header, ip_version);
      }
     else
         others++;
@@ -299,7 +306,7 @@ int main(int argc, char * argv[]) {
             fprintf(outfile,
                     "\n  Celkový počet: ...%d\n"
                     "  TCP: .............%d\n"
-                    "  Nepodporované: ...%d\n", total, tcp_count, others);
+                    "  Ostatní: .........%d\n", total, tcp_count, others);
         }
         return OK;
     }
@@ -310,6 +317,14 @@ int main(int argc, char * argv[]) {
             exit(BAD_ARG_VALUE);
         }
         pcap_loop(handle, num_arg, callback, nullptr);  // https://linux.die.net/man/3/pcap_loop
+        pcap_close(handle);
+        if (stats_flag){
+            total = tcp_count + others;
+            fprintf(outfile,
+                    "\n  Celkový počet: ...%d\n"
+                    "  TCP: .............%d\n"
+                    "  Ostatní: .........%d\n", total, tcp_count, others);
+        }
     }
 }
 
@@ -318,9 +333,8 @@ int main(int argc, char * argv[]) {
  * @param packet ukazatel na pole obsahující data příchozího paketu
  * @param frame ukazatel na strukturu představující zaobalující rámec celého paketu,
  *              odsud funkce získává čas přijetí paketu
- * @param size celková velikost paketu
  */
-void process_tcp_packet(unsigned char * packet, const struct pcap_pkthdr * frame, int size, sa_family_t ip_version)
+void process_tcp_packet(unsigned char * packet, const struct pcap_pkthdr * frame, sa_family_t ip_version)
 {
     unsigned short ethhdrlen = sizeof(struct ethhdr);
     unsigned short iphXhdrlen;
@@ -422,7 +436,7 @@ void process_tcp_packet(unsigned char * packet, const struct pcap_pkthdr * frame
                     fprintf(outfile, "%s,%d,", tcp_stream_p->client_ip, tcp_stream_p->client_port);
                     fprintf(outfile, "%s,%s,", tcp_stream_p->server_ip, tcp_stream_p->tlsStream.sni);
                     fprintf(outfile, "%d,%d,", tcp_stream_p->tlsStream.bytes, tcp_stream_p->packets);
-                    fprintf(outfile, "%ld.%06ld\n", time_div.tv_sec, time_div.tv_usec);
+                    fprintf(outfile , "%ld.%03d\n", time_div.tv_sec, int(round(time_div.tv_usec/1000.0)));
                 }
                 tcp_streams.erase((std::vector<tcp_stream>::iterator )tcp_stream_p);
             }
@@ -452,7 +466,7 @@ void process_tcp_packet(unsigned char * packet, const struct pcap_pkthdr * frame
                 fprintf(outfile , "%s,%d,", tcp_stream_p->client_ip, tcp_stream_p->client_port);
                 fprintf(outfile , "%s,%s,", tcp_stream_p->server_ip, tcp_stream_p->tlsStream.sni);
                 fprintf(outfile , "%d,%d,", tcp_stream_p->tlsStream.bytes, tcp_stream_p->packets);
-                fprintf(outfile , "%ld.%06ld\n", time_div.tv_sec, time_div.tv_usec);
+                fprintf(outfile , "%ld.%03d\n", time_div.tv_sec, int(round(time_div.tv_usec/1000.0)));
             }
             tcp_streams.erase((std::vector<tcp_stream>::iterator )tcp_stream_p);
         }
@@ -471,7 +485,7 @@ void process_tcp_packet(unsigned char * packet, const struct pcap_pkthdr * frame
 void process_payload(const unsigned char *packet, const pcap_pkthdr *frame, int header_size, tcp_stream *tcp_stream_p) {
     uint32_t payload_len = frame->len - header_size;
     auto * payload = (unsigned char *) (packet + header_size);
-    for(int i = 0; ((i + 4) < payload_len)  and (payload_len > 6); i++){
+    for(unsigned int i = 0; ((i + 4) < payload_len); i++){
         uint8_t content_type = payload[i];
         uint16_t version = payload[i + 1] * 256 + payload[i + 2];
         uint16_t content_len = payload[i + 3] * 256 + payload[i + 4];
